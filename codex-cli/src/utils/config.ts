@@ -70,10 +70,13 @@ export type MemoryConfig = {
   enabled: boolean;
 };
 
+export type ModelEffort = 'low' | 'medium' | 'high';
+
 // Represents full runtime config, including loaded instructions.
 export type AppConfig = {
   apiKey?: string;
   model: string;
+  modelEffort?: ModelEffort;
   instructions: string;
   fullAutoErrorMode?: FullAutoErrorMode;
   memory?: MemoryConfig;

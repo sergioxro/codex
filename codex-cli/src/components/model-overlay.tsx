@@ -5,6 +5,7 @@ import {
 } from "../utils/model-utils.js";
 import { Box, Text, useInput } from "ink";
 import React, { useEffect, useState } from "react";
+import { ModelEffort } from "../utils/config.js";
 
 /**
  * Props for <ModelOverlay>.
@@ -16,13 +17,15 @@ import React, { useEffect, useState } from "react";
  */
 type Props = {
   currentModel: string;
+  currentEffort?: ModelEffort;
   hasLastResponse: boolean;
-  onSelect: (model: string) => void;
+  onSelect: (model: string, effort?: ModelEffort) => void;
   onExit: () => void;
 };
 
 export default function ModelOverlay({
   currentModel,
+  currentEffort,
   hasLastResponse,
   onSelect,
   onExit,
@@ -30,6 +33,8 @@ export default function ModelOverlay({
   const [items, setItems] = useState<Array<{ label: string; value: string }>>(
     [],
   );
+  const [showEffortSelect, setShowEffortSelect] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(currentModel);
 
   useEffect(() => {
     (async () => {
@@ -50,6 +55,19 @@ export default function ModelOverlay({
     })();
   }, []);
 
+  const handleModelSelect = (model: string) => {
+    setSelectedModel(model);
+    if (model.startsWith('o')) {
+      setShowEffortSelect(true);
+    } else {
+      onSelect(model);
+    }
+  };
+
+  const handleEffortSelect = (value: string) => {
+    onSelect(selectedModel, value as ModelEffort);
+  };
+
   // ---------------------------------------------------------------------------
   // If the conversation already contains a response we cannot change the model
   // anymore because the backend requires a consistent model across the entire
@@ -62,6 +80,9 @@ export default function ModelOverlay({
   useInput((_input, key) => {
     if (hasLastResponse && (key.escape || key.return)) {
       onExit();
+    }
+    if (showEffortSelect && key.escape) {
+      setShowEffortSelect(false);
     }
   });
 
@@ -91,17 +112,43 @@ export default function ModelOverlay({
     );
   }
 
+  if (showEffortSelect) {
+    const effortItems = [
+      { label: 'Low Effort', value: 'low' },
+      { label: 'Medium Effort', value: 'medium' },
+      { label: 'High Effort', value: 'high' },
+    ];
+
+    return (
+      <TypeaheadOverlay
+        title="Select model effort"
+        description={
+          <Text>
+            Current effort: <Text color="greenBright">{currentEffort || 'medium'}</Text>
+          </Text>
+        }
+        initialItems={effortItems}
+        currentValue={currentEffort || 'medium'}
+        onSelect={handleEffortSelect}
+        onExit={() => setShowEffortSelect(false)}
+      />
+    );
+  }
+
   return (
     <TypeaheadOverlay
       title="Switch model"
       description={
         <Text>
           Current model: <Text color="greenBright">{currentModel}</Text>
+          {currentEffort && selectedModel.startsWith('o') && (
+            <Text> (Effort: <Text color="greenBright">{currentEffort}</Text>)</Text>
+          )}
         </Text>
       }
       initialItems={items}
       currentValue={currentModel}
-      onSelect={onSelect}
+      onSelect={handleModelSelect}
       onExit={onExit}
     />
   );

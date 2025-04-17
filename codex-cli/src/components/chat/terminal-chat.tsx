@@ -3,6 +3,8 @@ import type { CommandConfirmation } from "../../utils/agent/agent-loop.js";
 import type { AppConfig } from "../../utils/config.js";
 import type { ColorName } from "chalk";
 import type { ResponseItem } from "openai/resources/responses/responses.mjs";
+import type { ReviewDecision } from "src/utils/agent/review.ts";
+import type { ModelEffort } from "../../utils/config.js";
 
 import TerminalChatInput from "./terminal-chat-input.js";
 import { TerminalChatToolCallCommand } from "./terminal-chat-tool-call-item.js";
@@ -130,6 +132,7 @@ export default function TerminalChat({
   // Desktop notification setting
   const notify = config.notify;
   const [model, setModel] = useState<string>(config.model);
+  const [modelEffort, setModelEffort] = useState<ModelEffort | undefined>(config.modelEffort);
   const [lastResponseId, setLastResponseId] = useState<string | null>(null);
   const [items, setItems] = useState<Array<ResponseItem>>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -402,6 +405,42 @@ export default function TerminalChat({
     [items, model],
   );
 
+  const handleModelSelect = (model: string, effort?: ModelEffort) => {
+    if (isLoggingEnabled()) {
+      log(
+        "TerminalChat: interruptAgent invoked – calling agent.cancel()",
+      );
+      if (!agent) {
+        log("TerminalChat: agent is not ready yet");
+      }
+    }
+    agent?.cancel();
+    setLoading(false);
+
+    setModel(model);
+    setModelEffort(effort);
+    setLastResponseId((prev) =>
+      prev && model !== config.model ? null : prev,
+    );
+
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `switch-model-${Date.now()}`,
+        type: "message",
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: `Switched model to ${model}${effort ? ` (${effort} effort)` : ''}`,
+          },
+        ],
+      },
+    ]);
+
+    setOverlayMode("none");
+  };
+
   return (
     <Box flexDirection="column">
       <Box flexDirection="column">
@@ -494,45 +533,12 @@ export default function TerminalChat({
         {overlayMode === "model" && (
           <ModelOverlay
             currentModel={model}
+            currentEffort={config.modelEffort}
             hasLastResponse={Boolean(lastResponseId)}
-            onSelect={(newModel) => {
-              if (isLoggingEnabled()) {
-                log(
-                  "TerminalChat: interruptAgent invoked – calling agent.cancel()",
-                );
-                if (!agent) {
-                  log("TerminalChat: agent is not ready yet");
-                }
-              }
-              agent?.cancel();
-              setLoading(false);
-
-              setModel(newModel);
-              setLastResponseId((prev) =>
-                prev && newModel !== model ? null : prev,
-              );
-
-              setItems((prev) => [
-                ...prev,
-                {
-                  id: `switch-model-${Date.now()}`,
-                  type: "message",
-                  role: "system",
-                  content: [
-                    {
-                      type: "input_text",
-                      text: `Switched model to ${newModel}`,
-                    },
-                  ],
-                },
-              ]);
-
-              setOverlayMode("none");
-            }}
+            onSelect={handleModelSelect}
             onExit={() => setOverlayMode("none")}
           />
         )}
-
         {overlayMode === "approval" && (
           <ApprovalModeOverlay
             currentMode={approvalPolicy}
@@ -563,7 +569,6 @@ export default function TerminalChat({
             onExit={() => setOverlayMode("none")}
           />
         )}
-
         {overlayMode === "help" && (
           <HelpOverlay onExit={() => setOverlayMode("none")} />
         )}
